@@ -51,10 +51,44 @@
     .gate input { width: 100%; padding: 10px; border: 1px solid #ccd; border-radius: 6px; margin: 10px 0; font-size: 15px; }
     .error { color: #b00020; min-height: 18px; font-size: 14px; }
 
+    #panel { position: fixed; top: 0; right: 0; bottom: 37px; width: 460px; max-width: 100%; background: #fff; z-index: 2000;
+             box-shadow: -4px 0 18px rgba(0,0,0,.25); transform: translateX(105%); transition: transform .25s ease;
+             display: flex; flex-direction: column; }
+    #panel.open { transform: none; }
+    .panel-head { background: var(--brand); color: #fff; padding: 12px 14px 8px; position: relative; }
+    .panel-head h3 { margin: 0; font-size: 17px; }
+    .panel-head p { margin: 3px 0 6px; font-size: 13px; opacity: .9; }
+    .panel-head .actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+    .panel-head .actions button { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.5); color: #fff;
+                                  border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; letter-spacing: .3px; }
+    .badge.sim { background: #fff3cd; color: #6b4e00; }
+    .badge.real { background: #c8e6c9; color: #1b5e20; }
+    #panelTabs { display: flex; border-bottom: 1px solid #dde; background: #f5f7fb; }
+    #panelTabs button { flex: 1; border: 0; background: none; padding: 9px 4px; font-size: 13px; cursor: pointer; color: #445;
+                        border-bottom: 3px solid transparent; }
+    #panelTabs button.active { color: var(--brand); font-weight: 700; border-bottom-color: var(--brand2); background: #fff; }
+    #panelBody { flex: 1; overflow: auto; padding: 12px 14px 18px; font-size: 13.5px; }
+    #panelBody h4 { margin: 10px 0 6px; font-size: 13.5px; color: var(--brand); }
+    .chart { position: relative; margin-bottom: 8px; }
+    .kv, .grid { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .kv td, .grid td, .grid th { border-bottom: 1px solid #eee; padding: 5px 4px; text-align: left; }
+    .kv td:first-child { color: #556; width: 45%; }
+    .grid th { background: #f5f7fb; font-size: 12.5px; }
+    .grid i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+    .note { color: #667; font-size: 12px; line-height: 1.4; }
+    .highlights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 6px; }
+    .highlights div { background: #f5f7fb; border-radius: 6px; padding: 8px; font-size: 12px; text-align: center; line-height: 1.3; }
+    .highlights span { display: block; font-size: 20px; font-weight: 700; color: var(--brand); }
+    .highlights small { color: #778; }
+    .hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(11,61,145,.9);
+            color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12.5px; pointer-events: none; }
+
     @media (max-width: 800px) {
       #maps { flex-direction: column; }
       .map + .map { border-left: 0; border-top: 3px solid #fff; }
       .demo { font-size: 11px; }
+      #panel { width: 100%; top: 35%; }
     }
   </style>
 </head>
@@ -70,8 +104,23 @@
     </div>
     <div id="mapPi" class="map">
       <div class="demo">DEMO MAP · model trained on synthetic soil points · not for MRV reporting</div>
+      <div class="hint" id="clickHint">Click any cell for weather, RothC, livestock &amp; credit results</div>
     </div>
   </div>
+
+  <aside id="panel" aria-label="Cell results">
+    <div class="panel-head">
+      <h3 id="panelTitle">Cell</h3>
+      <p id="panelSubtitle"></p>
+      <span id="panelBadge" class="badge sim">SIMULATED DATA</span>
+      <div class="actions">
+        <button id="panelDownload" title="Download cell results as JSON">⤓ JSON</button>
+        <button id="panelClose" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <nav id="panelTabs"></nav>
+    <div id="panelBody"></div>
+  </aside>
   <footer>
     © CGIAR · Open dMRV — Setegn &amp; Daniel
     <a href="#" id="aboutLink">About &amp; data sources</a>
@@ -99,11 +148,17 @@
       <table id="aboutTable"></table>
       <p><strong>Status:</strong> the model is trained on synthetic demo soil points, so the pattern only shows how the
         product will look. It will be replaced by predictions from EthioSoilGrids and field samples with real Earth-observation covariates.</p>
+      <p><strong>Click a cell</strong> to open its results: weather, RothC scenarios (BAU, Low, Medium, High), livestock
+        emissions and VM0042-style credits. These are <strong>simulated</strong> (deterministic per cell) until model runs are
+        loaded from <code>data/results.js</code>.</p>
       <button id="closeAbout">Close</button>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="js/simulate.js"></script>
+  <script src="js/panel.js"></script>
   <script>
     const PASS_HASH = "d337a109154edc27c4f444345c9dec0dd4def2eea344ff99c51d3b50dcade9c6";
     const STORAGE_KEY = "mrv_portal_unlocked_v1";
@@ -164,16 +219,33 @@
       return ctl;
     }
 
-    function popupHtml(p) {
-      return `<b>SOC stock 0–20 cm (demo)</b><br>
-        Q50: <b>${p.q50.toFixed(1)}</b> t/ha<br>
-        90% interval: ${p.q05.toFixed(1)} – ${p.q95.toFixed(1)} t/ha (width ${p.pi90.toFixed(1)})<br>
-        Elevation: ${p.elev} m · Rain (est.): ${p.rain} mm · NDVI (est.): ${p.ndvi}`;
+    function tooltipHtml(p) {
+      return `SOC <b>${p.q50.toFixed(1)}</b> t/ha (${p.q05.toFixed(1)}–${p.q95.toFixed(1)}) · ${p.elev} m<br><i>click for results</i>`;
     }
 
     function initMaps(data) {
       const { meta, basin, grid } = data;
       const bounds = L.geoJSON(basin).getBounds();
+      const maps = [];
+      let selection = [];
+
+      function clearSelection() {
+        selection.forEach((s) => s.remove());
+        selection = [];
+      }
+
+      function selectCell(layer, props) {
+        const cellBounds = layer.getBounds();
+        const c = cellBounds.getCenter();
+        clearSelection();
+        selection = maps.map((m) =>
+          L.rectangle(cellBounds, { color: "#00e5ff", weight: 3, fill: false, interactive: false }).addTo(m));
+        document.getElementById("clickHint").style.display = "none";
+        OmoPanel.open(OmoSim.resultsFor(props, c.lat, c.lng));
+      }
+
+      OmoPanel.init();
+      OmoPanel.onClose = clearSelection;
 
       function buildMap(id, field, breaks, legendTitle) {
         const bm = basemaps();
@@ -193,7 +265,10 @@
         const socLayer = L.geoJSON(grid, {
           renderer: canvas,
           style: (f) => ({ stroke: false, fillOpacity: 0.78, fillColor: classColor(f.properties[field], breaks) }),
-          onEachFeature: (f, layer) => layer.bindPopup(popupHtml(f.properties)),
+          onEachFeature: (f, layer) => {
+            layer.bindTooltip(tooltipHtml(f.properties), { sticky: true, direction: "top" });
+            layer.on("click", () => selectCell(layer, f.properties));
+          },
         }).addTo(map);
         const basinLayer = L.geoJSON(basin, { style: { color: "#0b3d91", weight: 2.5, fill: false } }).addTo(map);
         const [minx, miny, maxx, maxy] = meta.pilot_bbox;
@@ -211,6 +286,7 @@
         L.control.scale({ position: "bottomright" }).addTo(map);
         legend(legendTitle, breaks).addTo(map);
         map.fitBounds(bounds);
+        maps.push(map);
         return map;
       }
 
