@@ -1,0 +1,43 @@
+{
+  "title": "Omo-Gibe Crop-Livestock SOC Explorer",
+  "demo": true,
+  "built": "2026-11-02",
+  "basin_area_km2": 70566,
+  "cells": 2296,
+  "cell_deg": 0.05,
+  "depth_cm": "0-20",
+  "soc_breaks": [
+    12.05,
+    15.78,
+    17.4,
+    18.34,
+    19.49,
+    24.16
+  ],
+  "pi90_breaks": [
+    6.11,
+    8.46,
+    9.25,
+    9.74,
+    11.53,
+    13.73
+  ],
+  "soc_mean_t_ha": 17.91,
+  "soc_total_tg_demo": 126.36,
+  "pilot_bbox": [
+    36.9,
+    6.9,
+    37.1,
+    7.1
+  ],
+  "rothc_site": [
+    7.0,
+    37.0
+  ],
+  "sources": {
+    "boundary": "HydroBASINS v1c (Lehner & Grill 2013), level 6, upstream of Omo delta",
+    "elevation": "Copernicus GLO-90 DEM via Open-Meteo elevation API",
+    "model": "Quantile Regression Forest (quantile-forest), Q05/Q50/Q95",
+    "training": "SYNTHETIC demo soil points - replace with EthioSoilGrids + field samples"
+  }
+}

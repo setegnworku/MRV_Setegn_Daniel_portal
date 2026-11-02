@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Omo-Gibe Crop–Livestock SOC Explorer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    :root { --brand: #0b3d91; --brand2: #1565c0; --ink: #1d2433; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+    body { display: flex; flex-direction: column; }
+    #maps { flex: 1; display: flex; min-height: 0; }
+    .map { flex: 1; position: relative; }
+    .map + .map { border-left: 3px solid #fff; }
+    footer { background: var(--brand); color: #fff; text-align: center; padding: 8px 12px; font-size: 14px; }
+    footer a { color: #fff; margin-left: 18px; }
+
+    .titlebox { position: absolute; top: 10px; left: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    .title { background: var(--brand); color: #fff; padding: 8px 12px; border-radius: 4px; font-weight: 700;
+             display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
+    .title button { background: none; border: 1.5px solid #fff; color: #fff; border-radius: 50%; width: 22px; height: 22px;
+                    font-weight: 700; cursor: pointer; line-height: 1; padding: 0; }
+    .sync { background: #fff; padding: 6px 10px; border-radius: 4px; display: inline-flex; align-items: center; gap: 8px;
+            font-weight: 600; font-size: 14px; box-shadow: 0 1px 5px rgba(0,0,0,.3); width: max-content; }
+    .switch { position: relative; width: 36px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #bbb; border-radius: 20px; cursor: pointer; transition: .2s; }
+    .slider:before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+    .switch input:checked + .slider { background: var(--brand2); }
+    .switch input:checked + .slider:before { transform: translateX(16px); }
+
+    .demo { position: absolute; top: 10px; left: 10px; max-width: calc(100% - 80px); z-index: 1000; background: #fff3cd;
+            border: 1px solid #e0b100; color: #6b4e00; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 600;
+            box-shadow: 0 1px 5px rgba(0,0,0,.2); }
+    .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 5px rgba(0,0,0,.35); font-size: 12px; line-height: 18px; }
+    .legend h4 { margin: 0 0 4px; font-size: 12px; }
+    .legend i { width: 16px; height: 12px; float: left; margin: 3px 6px 0 0; border: 1px solid rgba(0,0,0,.2); }
+    .home-btn a { font-size: 16px; font-weight: 700; }
+
+    .modal { position: fixed; inset: 0; background: rgba(10,20,40,.55); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+    .modal.hidden { display: none; }
+    .card { background: #fff; border-radius: 10px; max-width: 640px; width: calc(100% - 32px); padding: 22px 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.35); max-height: 85vh; overflow: auto; }
+    .card h2 { margin: 0 0 8px; color: var(--brand); }
+    .card table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 10px 0; }
+    .card td { border-bottom: 1px solid #eee; padding: 5px 4px; vertical-align: top; }
+    .card td:first-child { font-weight: 600; width: 38%; }
+    .card button, .gate button { background: var(--brand2); color: #fff; border: 0; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .gate input { width: 100%; padding: 10px; border: 1px solid #ccd; border-radius: 6px; margin: 10px 0; font-size: 15px; }
+    .error { color: #b00020; min-height: 18px; font-size: 14px; }
+
+    @media (max-width: 800px) {
+      #maps { flex-direction: column; }
+      .map + .map { border-left: 0; border-top: 3px solid #fff; }
+      .demo { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="maps">
+    <div id="mapSoc" class="map">
+      <div class="titlebox">
+        <div class="title">Omo-Gibe SOC Explorer <button id="infoBtn" title="About this map">?</button></div>
+        <label class="sync">
+          <span class="switch"><input type="checkbox" id="syncToggle" checked /><span class="slider"></span></span> Sync
+        </label>
+      </div>
+    </div>
+    <div id="mapPi" class="map">
+      <div class="demo">DEMO MAP · model trained on synthetic soil points · not for MRV reporting</div>
+    </div>
+  </div>
+  <footer>
+    © CGIAR · Open dMRV — Setegn &amp; Daniel
+    <a href="#" id="aboutLink">About &amp; data sources</a>
+    <a href="../">Portal</a>
+  </footer>
+
+  <div id="gate" class="modal">
+    <div class="card gate">
+      <h2>Omo-Gibe SOC Explorer</h2>
+      <p>This explorer is shared with project collaborators. Enter the project password.</p>
+      <form id="gateForm">
+        <input id="pw" type="password" autocomplete="current-password" placeholder="Password" required />
+        <div class="error" id="pwError" aria-live="polite"></div>
+        <button type="submit">Open map</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="about" class="modal hidden">
+    <div class="card">
+      <h2>About this map</h2>
+      <p>Topsoil (0–20 cm) soil organic carbon (SOC) stock for the <strong>Omo-Gibe Basin, Ethiopia</strong>,
+        following the uncertainty-aware Quantile Regression Forest approach of Zhao et al. (2026, Geoderma) for Florida grazing lands.
+        Left: median prediction (Q50). Right: 90% prediction-interval width (Q95 − Q05), i.e. how uncertain the estimate is.</p>
+      <table id="aboutTable"></table>
+      <p><strong>Status:</strong> the model is trained on synthetic demo soil points, so the pattern only shows how the
+        product will look. It will be replaced by predictions from EthioSoilGrids and field samples with real Earth-observation covariates.</p>
+      <button id="closeAbout">Close</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    const PASS_HASH = "d337a109154edc27c4f444345c9dec0dd4def2eea344ff99c51d3b50dcade9c6";
+    const STORAGE_KEY = "mrv_portal_unlocked_v1";
+    const COLORS = ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026"];
+
+    async function sha256Hex(text) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function unlock() {
+      document.getElementById("gate").classList.add("hidden");
+      const s = document.createElement("script");
+      s.src = "data/layers.js";
+      s.onload = () => initMaps(window.OMO_GIBE);
+      s.onerror = () => alert("Could not load data/layers.js — run webapp/build_explorer_data.py first.");
+      document.body.appendChild(s);
+    }
+
+    document.getElementById("gateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if ((await sha256Hex(document.getElementById("pw").value)) === PASS_HASH) {
+        sessionStorage.setItem(STORAGE_KEY, "1");
+        unlock();
+      } else {
+        document.getElementById("pwError").textContent = "Incorrect password.";
+      }
+    });
+    if (sessionStorage.getItem(STORAGE_KEY) === "1") unlock();
+
+    function classColor(v, breaks) {
+      for (let i = 1; i < breaks.length - 1; i++) if (v <= breaks[i]) return COLORS[i - 1];
+      return COLORS[COLORS.length - 1];
+    }
+
+    function basemaps() {
+      return {
+        "OpenStreetMap": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          { maxZoom: 18, attribution: "© OpenStreetMap contributors" }),
+        "Satellite (Esri)": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 18, attribution: "Tiles © Esri" }),
+        "Topographic": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+          { maxZoom: 17, attribution: "© OpenTopoMap (CC-BY-SA)" }),
+      };
+    }
+
+    function legend(title, breaks) {
+      const ctl = L.control({ position: "bottomleft" });
+      ctl.onAdd = () => {
+        const div = L.DomUtil.create("div", "legend");
+        let html = `<h4>${title}</h4>`;
+        for (let i = 0; i < COLORS.length; i++) {
+          html += `<i style="background:${COLORS[i]}"></i>${breaks[i].toFixed(2)} – ${breaks[i + 1].toFixed(2)}<br>`;
+        }
+        div.innerHTML = html;
+        return div;
+      };
+      return ctl;
+    }
+
+    function popupHtml(p) {
+      return `<b>SOC stock 0–20 cm (demo)</b><br>
+        Q50: <b>${p.q50.toFixed(1)}</b> t/ha<br>
+        90% interval: ${p.q05.toFixed(1)} – ${p.q95.toFixed(1)} t/ha (width ${p.pi90.toFixed(1)})<br>
+        Elevation: ${p.elev} m · Rain (est.): ${p.rain} mm · NDVI (est.): ${p.ndvi}`;
+    }
+
+    function initMaps(data) {
+      const { meta, basin, grid } = data;
+      const bounds = L.geoJSON(basin).getBounds();
+
+      function buildMap(id, field, breaks, legendTitle) {
+        const bm = basemaps();
+        const canvas = L.canvas({ padding: 0.5 });
+        const map = L.map(id, { zoomControl: false, layers: [bm["OpenStreetMap"]], preferCanvas: true });
+        L.control.zoom({ position: "topright" }).addTo(map);
+
+        const home = L.control({ position: "topright" });
+        home.onAdd = () => {
+          const div = L.DomUtil.create("div", "leaflet-bar home-btn");
+          div.innerHTML = '<a href="#" title="Zoom to Omo-Gibe" role="button">⌂</a>';
+          L.DomEvent.on(div, "click", (e) => { L.DomEvent.stop(e); map.fitBounds(bounds); });
+          return div;
+        };
+        home.addTo(map);
+
+        const socLayer = L.geoJSON(grid, {
+          renderer: canvas,
+          style: (f) => ({ stroke: false, fillOpacity: 0.78, fillColor: classColor(f.properties[field], breaks) }),
+          onEachFeature: (f, layer) => layer.bindPopup(popupHtml(f.properties)),
+        }).addTo(map);
+        const basinLayer = L.geoJSON(basin, { style: { color: "#0b3d91", weight: 2.5, fill: false } }).addTo(map);
+        const [minx, miny, maxx, maxy] = meta.pilot_bbox;
+        const pilot = L.rectangle([[miny, minx], [maxy, maxx]], { color: "#00897b", weight: 2, fill: false, dashArray: "5 4" })
+          .bindTooltip("Pilot landscape (GEE agent region)");
+        const site = L.circleMarker(meta.rothc_site, { radius: 6, color: "#fff", weight: 2, fillColor: "#00897b", fillOpacity: 1 })
+          .bindTooltip("RothC demo site");
+        const pilotGroup = L.layerGroup([pilot, site]).addTo(map);
+
+        L.control.layers(bm, {
+          [field === "q50" ? "SOC stock (Q50)" : "PI90 width"]: socLayer,
+          "Omo-Gibe basin": basinLayer,
+          "Pilot area & RothC site": pilotGroup,
+        }, { position: "topright" }).addTo(map);
+        L.control.scale({ position: "bottomright" }).addTo(map);
+        legend(legendTitle, breaks).addTo(map);
+        map.fitBounds(bounds);
+        return map;
+      }
+
+      const left = buildMap("mapSoc", "q50", meta.soc_breaks, "SOC stocks (t/ha)");
+      const right = buildMap("mapPi", "pi90", meta.pi90_breaks, "90% Prediction Interval Width (t/ha)");
+
+      const toggle = document.getElementById("syncToggle");
+      let syncing = false;
+      function follow(src, dst) {
+        src.on("move", () => {
+          if (!toggle.checked || syncing) return;
+          syncing = true;
+          dst.setView(src.getCenter(), src.getZoom(), { animate: false });
+          syncing = false;
+        });
+      }
+      follow(left, right);
+      follow(right, left);
+      window.explorerMaps = { left, right };
+
+      const rows = [
+        ["Area", `${meta.basin_area_km2.toLocaleString()} km² (${meta.cells.toLocaleString()} cells of ${meta.cell_deg}°)`],
+        ["Depth", `${meta.depth_cm} cm`],
+        ["Mean SOC (demo)", `${meta.soc_mean_t_ha} t/ha`],
+        ["Total SOC (demo)", `${meta.soc_total_tg_demo} Tg`],
+        ["Boundary", meta.sources.boundary],
+        ["Elevation", meta.sources.elevation],
+        ["Model", meta.sources.model],
+        ["Training data", meta.sources.training],
+        ["Built", meta.built],
+      ];
+      document.getElementById("aboutTable").innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+    }
+
+    const about = document.getElementById("about");
+    const openAbout = (e) => { e.preventDefault(); about.classList.remove("hidden"); };
+    document.getElementById("infoBtn").addEventListener("click", openAbout);
+    document.getElementById("aboutLink").addEventListener("click", openAbout);
+    document.getElementById("closeAbout").addEventListener("click", () => about.classList.add("hidden"));
+  </script>
+</body>
+</html>
